@@ -1,0 +1,6 @@
+Name        Stmts   Miss  Cover   Missing
+-----------------------------------------
+citree.py      85     34    60%   64, 124-130, 138, 145-157, 190-229
+-----------------------------------------
+TOTAL          85     34    60%
+Coverage failure: total of 60 is less than fail-under=70
