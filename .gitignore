@@ -28,6 +28,9 @@ venv/
 *.egg-info/
 .installed.cfg
 *.egg
+.mypy_cache/
+.pytest_cache/
+
 
 # Installer logs
 pip-log.txt
@@ -70,3 +73,8 @@ docs/_build/
 
 # Pyenv
 .python-version
+
+# Rust
+target/
+build/
+Cargo.lock
