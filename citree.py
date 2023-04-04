@@ -22,7 +22,7 @@
 # --------------- Import libraries --------------
 from __future__ import annotations
 from sortedcontainers import SortedList
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Union
 from dataclasses import dataclass
 from collections import namedtuple
 from typing import List, Tuple, Dict, Set, Optional
@@ -36,21 +36,67 @@ import pandas as pd
 from sortedcollections import SortedList
 from matplotlib import pyplot as plt
 from scipy.cluster.hierarchy import dendrogram
+from math import log
 
 
 # ------------------------ Define a node for the tree ------------------------
-
-
 @dataclass
 class Node:
     id: float  # node id
     height: float  # height of the node in the tree
+
+
+@dataclass
+class NormalNode(Node):
     x: ndarray  # mean of the Gaussian
     V: ndarray  # covariance of the Gaussian
     inv_V: ndarray  # inverse of the covariance of the Gaussian
-    left: Optional[Node]  # left child
-    right: Optional[Node]  # right child
+    left: Optional[NormalNode]  # left child
+    right: Optional[NormalNode]  # right child    
+    
+    def __eq__(self, other):
+        if type(self) != type(other):
+            return False
+        return (np.array_equal(self.x, other.x) and
+                np.array_equal(self.V, other.V) and
+                np.array_equal(self.inv_V, other.inv_V) and
+                self.left == other.left and
+                self.right == other.right)
 
+@dataclass
+class PoissonNode(Node):
+    n: float  # number of observations in the bin
+    N: float  # total number of observations
+    left: Optional[PoissonNode]  # left child
+    right: Optional[PoissonNode]  # right child
+    
+    def __post_init__(self):
+        self.ln_n_over_N = log(self.n/self.N)   
+    
+    def __eq__(self, other):
+        if type(self) != type(other):
+            return False
+        return (self.n == other.n and
+                self.left == other.left and
+                self.right == other.right)
+
+@dataclass
+class MultinomialNode(Node):
+    n: ndarray  # number of observations in the bins
+    left:  Optional[MultinomialNode]  # left child
+    right: Optional[MultinomialNode]  # right child
+    
+    def __post_init__(self):
+        self.N = self.n.sum()
+        self.ln_n_over_N = np.log(self.n/self.N)   
+        
+    def __eq__(self, other):
+        if type(self) != type(other):
+            return False
+        return (np.array_equal(self.n, other.n)and
+                self.left == other.left and
+                self.right == other.right)
+    
 
 # ------------------------ Create the bins from the data using k-means ------------------------
 
@@ -68,7 +114,7 @@ def stage_1_fast_clustering_kmeans(data: ndarray,
             continue
         cluster_data = data[clusters == cluster, :]
         nodes.append(
-            Node(
+            NormalNode(
                 id=cluster,
                 height=0.0,
                 x=np.mean(cluster_data, axis=0),
@@ -90,25 +136,46 @@ stage_1_fast_clustering_strategies = {
 
 # ------------------------ Define a node pair ------------------------
 @dataclass
-class NodePairCitree:
+class NodePair:
     distance: float  # distance between the nodes s and t
-    node_s: Node
-    node_t: Node
 
+    # This custom __lt__ method is used by the SortedList class to maintain
+    # the heap invariant and keep the node_pairs list sorted by distance, 
+    # with the smallest distance at the front of the list.
+    
     def __lt__(self, other):
         return self.distance < other.distance
 
 
+
+@dataclass
+class NormalNodePair(NodePair):
+    node_s: NormalNode
+    node_t: NormalNode
+    
+@dataclass
+class PoissonNodePair(NodePair):
+    node_s: PoissonNode
+    node_t: PoissonNode
+
+
+@dataclass
+class MultinomialNodePair(NodePair):
+    node_s: MultinomialNode
+    node_t: MultinomialNode
+    
 # ---- Define the dictionary of functions that will be used to create the node pairs ------------------------
 
 node_pair_classes = {
-    "citree": NodePairCitree,
+    "normal": NormalNodePair,
+    "poisson": PoissonNodePair,
+    "multinomial": MultinomialNodePair,
 }
 
 # ------------------------ Get the observation id's ------------------------
 
 
-def get_tree_ids_from(node: Node) -> List[int | float]:
+def get_tree_ids_from(node: Node) -> List[Union[int, float]]:
     # Get the left nodes
     left_ids = [] if node.left is None else get_tree_ids_from(node.left)
 
@@ -125,7 +192,7 @@ def get_tree_ids_from(node: Node) -> List[int | float]:
 # ------------------------ Calculate the distance between two nodes ------------------------
 
 
-def calculate_citree_distance(Bs: Node, Bt: Node) -> float:
+def calculate_Normal_distance(Bs: NormalNode, Bt: NormalNode) -> float:
     # Calculate the difference between the nodes
     diff = Bs.x - Bt.x
 
@@ -136,12 +203,20 @@ def calculate_citree_distance(Bs: Node, Bt: Node) -> float:
     return diff.T @ combined_V @ diff # type: ignore
 
 
+def calculate_Poisson_distance(Bs: PoissonNode, Bt: PoissonNode) -> float:
+    return Bs.n * Bs.ln_n_over_N + Bt.n * Bt.ln_n_over_N - (Bs.n + Bt.n) * log((Bs.n + Bt.n) / (Bs.N + Bt.N))
+    
+
+def calculate_Multinomial_distance(Bs: MultinomialNode, Bt: MultinomialNode) -> float:
+    return Bs.n @ Bs.ln_n_over_N + Bt.n @ Bt.ln_n_over_N - (Bs.n + Bt.n) @ np.log((Bs.n + Bt.n) / (Bs.N + Bt.N)) # type: ignore
+    
+
 # ------------------------ Fuse two nodes ------------------------#
 
 
-def calculate_node_fusion_representative_citree(node_pair: NodePairCitree,
+def calculate_Normal_node_fusion_representative(node_pair: NormalNodePair,
                                                 id: int,
-                                                ) -> Node:
+                                                ) -> NormalNode:
     Bs = node_pair.node_s
     Bt = node_pair.node_t
 
@@ -158,7 +233,7 @@ def calculate_node_fusion_representative_citree(node_pair: NodePairCitree,
     height = Bs.height + Bt.height + node_pair.distance
 
     # Return the node
-    return Node(id=id,
+    return NormalNode(id=id,
                 height=height,
                 x=x_s_t,
                 V=V_s_t,
@@ -166,16 +241,53 @@ def calculate_node_fusion_representative_citree(node_pair: NodePairCitree,
                 left=Bs,
                 right=Bt)
 
+def calculate_Poisson_node_fusion_representative(node_pair: PoissonNodePair,
+                                                id: int,
+                                                ) -> PoissonNode:
+    """
+    Calculate the representative of a node pair.
 
+    Args:
+        node_pair: The node pair
+        id: The id of the representative
+
+    Returns:
+        The representative of the node pair
+    """
+    return PoissonNode(id     = id,
+                       height = node_pair.node_s.height + node_pair.node_t.height + node_pair.distance,
+                       left   = node_pair.node_s,
+                       right  = node_pair.node_t,
+                       n      = node_pair.node_s.n + node_pair.node_t.n,
+                       N      = node_pair.node_s.N + node_pair.node_t.N)
+
+
+
+
+def calculate_Multinomial_node_fusion_representative(node_pair: MultinomialNodePair,
+                                                id: int,
+                                                ) -> MultinomialNode:
+    return MultinomialNode(id     = id,
+                           height = node_pair.node_s.height + node_pair.node_t.height + node_pair.distance,
+                           left   = node_pair.node_s,
+                           right  = node_pair.node_t,
+                           n      = node_pair.node_s.n + node_pair.node_t.n
+                           )
+
+    
 # ----- Define helper dictionaries for factories -----
 
 calculate_distance_functions = {
-    "citree": calculate_citree_distance,
+    "normal":      calculate_Normal_distance,
+    "poisson":     calculate_Poisson_distance,
+    "multinomial": calculate_Multinomial_distance,
 }
 
 
 calculate_node_fusion_representative = {
-    "citree": calculate_node_fusion_representative_citree,
+    "normal":      calculate_Normal_node_fusion_representative,
+    "poisson":     calculate_Poisson_node_fusion_representative,
+    "multinomial": calculate_Multinomial_node_fusion_representative,
 }
 
 
@@ -183,15 +295,15 @@ stage_2_strategies = {
     strategy: {'calculate_distance': calculate_distance_functions[strategy],
                'calculate_node_combination': calculate_node_fusion_representative[strategy],
                'Node_Pair_Class': node_pair_classes[strategy],
-               } for strategy in ['citree']
+               } for strategy in ['normal', 'poisson', 'multinomial']
 }
 
 
 # ------------------------ Hierarchical clustering ------------------------
 
 
-def hierarchical_clustering(nodes: List[Node],
-                            stage_2_strategies: Dict) -> Tuple[List[Node], ndarray]:
+def hierarchical_clustering(nodes: List[NormalNode],
+                            stage_2_strategies: Dict) -> Tuple[List[NormalNode], ndarray]:
 
     calculate_distance = stage_2_strategies['calculate_distance']
     calculate_node_combination = stage_2_strategies['calculate_node_combination']
