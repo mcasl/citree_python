@@ -1,3 +1,5 @@
+test_runner.sh
+
 /target
 
 # Byte-compiled / optimized / DLL files
@@ -78,3 +80,5 @@ docs/_build/
 target/
 build/
 Cargo.lock
+.env/
+scratch.py

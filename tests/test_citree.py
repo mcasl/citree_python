@@ -1,86 +1,51 @@
-
+#from sklearn.cluster import KMeans
+import unittest
+#from pynodes import sum_int_1 # type: ignore
+from numpy.testing import assert_array_equal
+from unittest import TestCase
+# import matplotlib.pyplot as plt
+from scipy.cluster.hierarchy import fcluster
+import pandas as pd
+import numpy as np
 import os
 import sys
 sys.path.append(os.path.abspath(os.path.join('..')))
 
-import pandas as pd
-import numpy as np
-from numpy import ndarray
-from citree import (NormalNode, PoissonNode, MultinomialNode,
-                    NormalNodePair, PoissonNodePair, MultinomialNodePair,
+from citree import (Node, NormalPair, PoissonPair, MultinomialPair,
+                    NormalBin, PoissonBin, MultinomialBin,
                     stage_1_fast_clustering_strategies,
                     stage_2_strategies,
                     stage_1_fast_clustering_kmeans,
                     get_tree_ids_from,
-                    calculate_Normal_node_fusion_representative,
-                    calculate_Poisson_node_fusion_representative,
-                    calculate_Multinomial_node_fusion_representative,
-                    calculate_Normal_distance,
+                    calculate_normal_fusion_representative,
+                    calculate_poisson_fusion_representative,
+                    calculate_multinomial_fusion_representative,
+                    
                     calculate_Poisson_distance,
                     calculate_Multinomial_distance,
                     hierarchical_clustering,
-                    plot_dendrogram,
-                    node_pair_classes,
+                    # plot_dendrogram,
                     cut_tree,
                     )
-import sklearn as sk
-from sklearn.cluster import KMeans
-import unittest
-from unittest import TestCase
-import scipy
-import matplotlib.pyplot as plt
-from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
+
 
 # -------------- Node related tests -------------- #
 
 class TestNode(unittest.TestCase):
     def test_attributes(self):
         print("\nTesting Node attributes")
-        attributes = vars(NormalNode(0, 0, np.array([1, 2]), np.array([[3, 4], [5, 3]]),
-                                     np.array([[7, 8], [9, 10]]), None, None))
+        attributes = vars(Node(id=0,
+                                height=0,
+                                left_child=None, 
+                                right_child=None,
+                          ))
         self.assertEqual(attributes["id"], 0)
         self.assertEqual(attributes["height"], 0)
-        self.assertTrue(np.all(attributes["x"] == np.array([1, 2])))
-        self.assertTrue(np.all(attributes["V"] == np.array([[3, 4], [5, 3]])))
-        self.assertTrue(np.all(attributes["inv_V"] == np.array([[7, 8], [9, 10]])))
         self.assertIsNone(attributes["left"])
         self.assertIsNone(attributes["right"])
 
-# -------------- NodePairCitree related tests -------------- #
-class TestNormalNodePair(unittest.TestCase):
-    def setUp(self):
-        self.distance = 0.45
-        self.node_r = NormalNode(id=12,
-                           height=3.5,
-                           x=np.array([0, 0]),
-                           V=np.array([[1, 0], [0, 1]]),
-                           inv_V=np.array([[1, 0], [0, 1]]),
-                           left=None,
-                           right=None)
-        
-        self.node_s = NormalNode(id=17,
-                           height=8.8,
-                           x=np.array([10, 10]),
-                           V=np.array([[1, 0], [0, 1]]),
-                           inv_V=np.array([[1, 0], [0, 1]]),
-                           left=None,
-                           right=None)
-        
-        self.node_t = NormalNode(id=24,
-                           height=7.2,
-                           x=np.array([11, 10]),
-                           V=np.array([[1, 0], [0, 1]]),
-                           inv_V=np.array([[1, 0], [0, 1]]),
-                           left=None,
-                           right=None)
-        
 
-    def test_node_pair_citree(self):
-        print("\nTesting NodePairCitree attributes")
-        result = NormalNodePair(self.distance, self.node_s, self.node_t        )
-        self.assertEqual(result.distance, self.distance)
-        self.assertEqual(result.node_s, self.node_s)
-        self.assertEqual(result.node_t, self.node_t)
+# -------------- NodePairCitree related tests -------------- #
 
 # -------------- Stage 1 Fast Clustering KMeans related tests -------------- #
 class Stage1FastClusteringKMeansTests(TestCase):
@@ -98,17 +63,19 @@ class Stage1FastClusteringKMeansTests(TestCase):
         #print(f"X.columns : {X.columns}")
         #print(f"X.shape : {X.shape}")
         expected_output_ids = list(range(20))
-        actual_output = stage_1_fast_clustering_kmeans(data=X.values, number_of_bins=20, minimum_cardinality=10)
-        actual_output_ids = [ node.id for node in actual_output['leaf_nodes'] ]
+        actual_output = stage_1_fast_clustering_kmeans(data=X.values,
+                                                       number_of_bins=20,
+                                                       minimum_cardinality=10)
+        actual_output_ids = [ bin.node.id for bin in actual_output['leaf_bins'] ]
         #print("Expected output:", expected_output)
         #print("Actual output:", actual_output)
         self.assertEqual(expected_output_ids, actual_output_ids)
         
-        self.assertIsInstance(actual_output['leaf_nodes'], list)
-        for item in actual_output['leaf_nodes']:
-            self.assertIsInstance(item, NormalNode)
-            self.assertIsNone(item.left)
-            self.assertIsNone(item.right)
+        self.assertIsInstance(actual_output['leaf_bins'], list)
+        for item in actual_output['leaf_bins']:
+            self.assertIsInstance(item.node, Node)
+            self.assertIsNone(item.node.left)
+            self.assertIsNone(item.node.right)
             self.assertEqual(item.inv_V.shape, (3,3) )
 
     def test_stage_1_fast_clustering_kmeans_correctness_2(self):
@@ -118,8 +85,10 @@ class Stage1FastClusteringKMeansTests(TestCase):
         minimum_cardinality=10
         X = np.random.rand(1000, 3)
         # Test that the number of bins is correct
-        result = stage_1_fast_clustering_kmeans(data=X, number_of_bins=k, minimum_cardinality=minimum_cardinality)
-        bins = result['leaf_nodes']
+        result = stage_1_fast_clustering_kmeans(data=X,
+                                                number_of_bins=k,
+                                                minimum_cardinality=minimum_cardinality)
+        bins = result['leaf_bins']
         self.assertEqual(len(bins), k)
         clusters = result['clusters']
         #print(f'clusters: {clusters}')
@@ -131,7 +100,7 @@ class Stage1FastClusteringKMeansTests(TestCase):
         #print(f'bins: {bins}')
 
         # Test that the IDs of the bins are correct
-        bin_ids = [bin.id for bin in bins]
+        bin_ids = [bin.node.id for bin in bins]
         #print(f'bin_ids: {bin_ids}')
         self.assertEqual(set(bin_ids), set(range(k)))
 
@@ -155,35 +124,45 @@ class TestNormalCitree(unittest.TestCase):
         inv_V1 = np.linalg.inv(V1)
         inv_V2 = np.linalg.inv(V2)
         
-        node1 = NormalNode(id=1, height=1, x=np.array([1, 2]), V=V1, inv_V=inv_V1, left=None, right=None)
+        bin1 = NormalBin(node=Node(id=1, height=1, left_child=None, right_child=None),
+                         x=np.array([1, 2]),
+                         V=V1, 
+                         inv_V=inv_V1,
+                        )
             
-        node2 = NormalNode(id=2, height=1, x=np.array([3, 4]), V=V2, inv_V=inv_V2, left=None, right=None)
+        bin2 = NormalBin(node=Node(id=2, height=1, left_child=None, right_child=None),
+                         x=np.array([3, 4]),
+                         V=V2, 
+                         inv_V=inv_V2,
+          )
 
-        expected_new_node = NormalNode(
-            id=3,
-            height=4.827586206896552, 
-            x=np.array([1.82758621, 2.96551724]), 
-            V=np.array([[1.17241379, 1.03448276],
-                        [1.03448276, 2.20689655]]),
-            inv_V=np.array([[ 1.45454545, -0.68181818],
-                            [-0.68181818,  0.77272727]]),
-            left=node1, right=node2
-        )
+        expected_new_bin = NormalBin(node=Node(id=3,
+                                                 height=4.827586206896552, 
+                                                 left_child=bin1.node, 
+                                                 right_child=bin2.node),
+                                      x=np.array([1.82758621, 2.96551724]), 
+                                      V=np.array([[1.17241379, 1.03448276],
+                                                  [1.03448276, 2.20689655]]),
+                                      inv_V=np.array([[ 1.45454545, -0.68181818],
+                                                      [-0.68181818,  0.77272727]]),
+                                )
+        
 
-        new_node_pair = NormalNodePair(distance=2.8275862068965516, node_s=node1, node_t=node2)
-        new_node = calculate_Normal_node_fusion_representative(new_node_pair, id=3)
+        new_bin_pair = NormalPair(distance=2.8275862068965516, bin_s=bin1, bin_t=bin2)
+        new_bin = calculate_normal_fusion_representative(new_bin_pair, id=3)
         #print(f'new_node.x: {new_node.x}') 
         #print(f'expected_new_node.x: {expected_new_node.x}')
         #print(f'new_node.V: {new_node.V}')
         #print(f'expected_new_node.V: {expected_new_node.V}')
         #print(f'new_node.inv_V: {new_node.inv_V}')
         #print(f'expected_new_node.inv_V: {expected_new_node.inv_V}')
-        self.assertTrue(np.allclose(expected_new_node.x, new_node.x))
-        self.assertTrue(np.allclose(expected_new_node.V, new_node.V))
-        self.assertTrue(np.allclose(expected_new_node.inv_V, new_node.inv_V))
-        self.assertEqual(expected_new_node.height, new_node.height)        
-        self.assertEqual(expected_new_node.left, new_node.left)
-        self.assertEqual(expected_new_node.right, new_node.right)
+        self.assertTrue(np.allclose(expected_new_bin.x, new_bin.x))
+        self.assertTrue(np.allclose(expected_new_bin.V, new_bin.V))
+        self.assertTrue(np.allclose(expected_new_bin.inv_V, 
+                                    new_bin.inv_V))
+        self.assertEqual(expected_new_bin.node.height, new_bin.node.height)        
+        self.assertEqual(expected_new_bin.node.left, new_bin.node.left)
+        self.assertEqual(expected_new_bin.node.right, new_bin.node.right)
 
 class TestHierarchicalClustering(unittest.TestCase):
     def setUp(self):
@@ -199,17 +178,21 @@ class TestHierarchicalClustering(unittest.TestCase):
         self.X = X.values
         self.k = 20
         first_stage = stage_1_fast_clustering_strategies[
-            'kmeans_vanilla'](data=self.X, number_of_bins=self.k, minimum_cardinality=10)
+            'kmeans_vanilla'](data=self.X, 
+                              number_of_bins=self.k,
+                              minimum_cardinality=10)
         
-        self.nodes = first_stage['leaf_nodes']
+        self.nodes = first_stage['leaf_bins']
         self.clusters = first_stage['clusters']
         self.stage_2_strategies = stage_2_strategies['normal']
     
     def test_hierarchical_clustering(self):
-        node_list, linkage_matrix = hierarchical_clustering(self.nodes, self.stage_2_strategies)
+        node_list, linkage_matrix = hierarchical_clustering(self.nodes, 
+                                                            self.stage_2_strategies)
         
         self.assertEqual(len(node_list), 1) # at the end there should be one node
-        self.assertEqual(len(linkage_matrix), self.k - 1) # number of pairwise comparisons equal to number of clusters - 1
+        self.assertEqual(len(linkage_matrix), self.k - 1) 
+        # number of pairwise comparisons equal to number of clusters - 1
 
         # Get the class labels of the leaf nodes in the dendrogram
         dendrogram_classes = get_tree_ids_from(node_list[0])
@@ -220,7 +203,7 @@ class TestHierarchicalClustering(unittest.TestCase):
         # Compare the class labels and the observations in the bins
 
         # plot the dendrogram using the linkage matrix and scipy
-        plot_dendrogram(linkage_matrix, labels = [str(i) for i in range(self.k)] )
+        # plot_dendrogram(linkage_matrix, labels = [str(i) for i in range(self.k)] )
          
         # Cut the dendrogram to obtain a specific number of clusters
         num_clusters = 3
@@ -241,89 +224,134 @@ class TestHierarchicalClustering(unittest.TestCase):
         
 class TestPoisson(unittest.TestCase):
     def test_calculate_poisson_distance(self):
-        node_1 = PoissonNode(id=1, n=3, N=5,  height=0, left=None, right=None)
-        node_2 = PoissonNode(id=2, n=2, N=10, height=0, left=None, right=None)
+        node_1 = PoissonBin(node=Node(id=1,
+                                      height=0,
+                                      left_child=None,
+                                      right_child=None),
+                             n=3,
+                             N=5)
+        node_2 = PoissonBin(node=Node(id=2, 
+                                      height=0,
+                                      left_child=None, 
+                                      right_child=None),
+                             n=2,
+                             N=10)
         expected_result =  0.741709
         result = calculate_Poisson_distance(node_1, node_2)
         self.assertEqual(round(result, 6), expected_result)
 
     def test_calculate_Poisson_node_fusion_representative(self):
-        node_s = PoissonNode(id=1, height=1.5, left=None, right=None, n=2, N=3)
-        node_t = PoissonNode(id=2, height=4.0, left=None, right=None, n=4, N=9)
-        node_pair = PoissonNodePair(node_s=node_s, node_t=node_t, distance=6.0)
-        result_node = calculate_Poisson_node_fusion_representative(node_pair=node_pair,
+        node_s = PoissonBin(node=Node(id=1,
+                                      height=1.5,
+                                      left_child=None,
+                                      right_child=None),
+                            n=2,
+                            N=3)
+        node_t = PoissonBin(node=Node(id=2,
+                                      height=4.0,
+                                      left_child=None,
+                                      right_child=None),
+                             n=4,
+                             N=9)
+        node_pair = PoissonPair(bin_s=node_s,
+                                bin_t=node_t,
+                                distance=6.0)
+        result_bin = calculate_poisson_fusion_representative(node_pair=node_pair,
                                                                    id=3)
-
-        self.assertEqual(result_node.id, 3)
-        self.assertEqual(result_node.height, 11.5)
-        self.assertEqual(result_node.left, node_pair.node_s)
-        self.assertEqual(result_node.right, node_pair.node_t)
-        self.assertEqual(result_node.n, 6)
-        self.assertEqual(result_node.N, 12)
+        self.assertIsNotNone(result_bin)
+        self.assertIsNotNone(result_bin.node)
+        self.assertIsNotNone(result_bin.node.left)
+        self.assertIsNotNone(result_bin.node.right)
+        self.assertEqual(result_bin.node.id, 3)
+        self.assertEqual(result_bin.node.height, 11.5)
+        if result_bin.node.left is not None:
+            self.assertEqual(result_bin.node.left.bin, node_pair.bin_s)
+        if result_bin.node.right is not None:
+            self.assertEqual(result_bin.node.right.bin, node_pair.bin_t)
+        self.assertEqual(result_bin.n, 6)
+        self.assertEqual(result_bin.N, 12)
 
 class TestMultinomial(unittest.TestCase):
     def test_calculate_Multinomial_distance_1(self):
-        Bs = MultinomialNode(id=1, height=0, n=np.array([2, 1]), left=None, right=None)
-        Bt = MultinomialNode(id=2, height=0, n=np.array([1, 2]), left=None, right=None)
+        Bs = MultinomialBin(node=Node(id=1, height=0, left_child=None, right_child=None),
+                            n=np.array([2, 1])
+                            )
+        Bt = MultinomialBin(node=Node(id=2, height=0, left_child=None, right_child=None),
+                            n=np.array([1, 2])
+                            )
         expected = 0.33979807359079395
-        actual = calculate_Multinomial_distance(Bs, Bt)
+        actual = calculate_Multinomial_distance(Bs=Bs, Bt=Bt)
         self.assertAlmostEqual(actual, expected, places=7)
         
     def test_calculate_Multinomial_distance_2(self):
-        Bs = MultinomialNode(id=1, height=0, n=np.array([5, 10]), left=None, right=None)
-        Bt = MultinomialNode(id=2, height=0, n=np.array([15, 5]), left=None, right=None)
+        Bs = MultinomialBin(node=Node(id=1, height=0, left_child=None, right_child=None),
+                            n=np.array([5, 10])
+                            )
+
+        Bt = MultinomialBin(node=Node(id=2, height=0, left_child=None, right_child=None),
+                            n=np.array([15, 5])
+                            )
+
         expected = 3.1073682477181492 
         actual = calculate_Multinomial_distance(Bs, Bt)
         self.assertAlmostEqual(actual, expected, places=7)
         
     def test_calculate_Multinomial_node_fusion_representative(self):
         # Test case 1:
-        node_s = MultinomialNode(id=1,
-                                 height=10,
-                                 left=None, right=None,
-                                 n=np.array([2, 3, 1]))
+        bin_s = MultinomialBin(node=Node(id=1,
+                                        height=10,
+                                        left_child=None, right_child=None),
+                             n=np.array([2, 3, 1])
+                      )
 
-        node_t = MultinomialNode(id=2,
-                                 height=15,
-                                 left=None, right=None,
-                                 n=np.array([1, 2, 4]))
+        node_t = MultinomialBin(node=Node( id=2,
+                                           height=15,
+                                           left_child=None,
+                                           right_child=None),
+                                 n=np.array([1, 2, 4])
+                        )
         
-        node_pair = MultinomialNodePair(node_s   = node_s,
-                                        node_t   = node_t,
-                                        distance = 7)
-        id = 3
-        expected_node = MultinomialNode(id=3,
-                                        height=32,
-                                        left=node_s, 
-                                        right=node_t, 
-                                        n=np.array([3, 5, 5]))
+        node_pair = MultinomialPair(bin_s   = bin_s,
+                                    bin_t   = node_t,
+                                    distance = 7)
+        id_ = 3
+        expected_bin = MultinomialBin(node=Node(id=3,
+                                                height=32,
+                                                left_child=bin_s.node, 
+                                                right_child=node_t.node), 
+                                       n=np.array([3, 5, 5])
+                                       )
         
-        actual_node = calculate_Multinomial_node_fusion_representative(node_pair, id)
-        self.assertEqual(actual_node, expected_node)
+        actual_node = calculate_multinomial_fusion_representative(node_pair, id_)
+        self.assertEqual(actual_node, expected_bin)
         
         # Test case 2: 
-        node_s=MultinomialNode(id=4, height=14, left=None, right=None,
-                               n=np.array([3,6,4]))
-        node_t=MultinomialNode(id=5, height=18, left=None, right=None,
-                               n=np.array([2,5,4]))
-        node_pair = MultinomialNodePair(node_s=node_s,
-                                        node_t=node_t,
-                                        distance=9)
-        id = 7
-        expected_node = MultinomialNode(id=7, height=41, left=node_s, right=node_t,
-                                        n=np.array([5, 11, 8]))
+        bin_s=MultinomialBin(node=Node(id=4, height=14, left_child=None, right_child=None),
+                              n=np.array([3,6,4])
+                    )
+        bin_t=MultinomialBin(node=Node(id=5, height=18, left_child=None, right_child=None),
+                              n=np.array([2,5,4])
+                    )
+        node_pair = MultinomialPair( bin_s=bin_s,
+                                     bin_t=bin_t,
+                                     distance=9)
+        id_ = 7
+        expected_bin = MultinomialBin(node=Node(id=7,
+                                                height=41,
+                                                left_child=bin_s.node,
+                                                right_child=bin_t.node),
+                            n=np.array([5, 11, 8])
+                        )
                                        
-        actual_node = calculate_Multinomial_node_fusion_representative(node_pair, id)
-        self.assertEqual(actual_node, expected_node)
+        actual_node = calculate_multinomial_fusion_representative(node_pair, id_)
+        self.assertEqual(actual_node, expected_bin)
         
-        
-        
-        
-        
-        
-        
-        
-        
+class TestRustModule(unittest.TestCase):
+    pass
+    # def test_sum_int_1(self):
+    #     x = np.array([1, 2, 3])
+    #     result = sum_int_1(input_array=x)
+    #     assert_array_equal(result, np.array([2, 3, 4]))
         
 if __name__ == '__main__':
     unittest.main()
