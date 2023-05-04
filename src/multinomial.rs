@@ -1,19 +1,16 @@
 use ndarray;
-use ndarray::{Array1, Array2};
-use ndarray_linalg::Inverse;
-use ndarray_linalg::krylov::R;
-use std::marker::PhantomData;
+use ndarray::Array1;
 
-use std::cmp::Ordering;
-
-use crate::Node;
+use crate::{Node, NodeCount, NodeId};
+use anyhow::Result;
 
 // -------------------------- MultinomialNode --------------------------
 
 #[derive(Debug, Clone)]
 pub struct MultinomialNode {
-    id: usize,
+    id: NodeId,
     height: f64,
+    count: NodeCount,
     left_child: Option<Box<MultinomialNode>>,
     right_child: Option<Box<MultinomialNode>>,
     n: Array1<f64>,
@@ -25,8 +22,9 @@ pub struct MultinomialNode {
 
 impl MultinomialNode {
     pub fn new(
-        id: usize,
+        id: NodeId,
         height: f64,
+        count: NodeCount,
         left_child: Option<Box<MultinomialNode>>,
         right_child: Option<Box<MultinomialNode>>,
         n: Array1<f64>,
@@ -36,6 +34,7 @@ impl MultinomialNode {
         MultinomialNode {
             id,
             height,
+            count,
             left_child,
             right_child,
             n,
@@ -55,19 +54,19 @@ impl MultinomialNode {
     pub fn get_ln_n_over_total(&self) -> &Array1<f64> {
         &self.ln_n_over_total
     }
-
-
-
-
 }
 
 impl Node for MultinomialNode {
-    fn get_id(&self) -> usize {
+    fn get_id(&self) -> NodeId {
         self.id
     }
 
     fn get_height(&self) -> f64 {
         self.height
+    }
+
+    fn get_count(&self) -> NodeCount {
+        self.count
     }
 
     fn get_left_child(&self) -> &Option<Box<Self>> {
@@ -78,24 +77,28 @@ impl Node for MultinomialNode {
         &self.right_child
     }
 
+    fn distance(&self, other: &Self) -> Result<f64> {
+        let n1 = &self.n;
+        let ln1 = &self.ln_n_over_total;
 
+        let n2 = &other.n;
+        let ln2 = &other.ln_n_over_total;
 
-    fn distance(&self, other: &Self) -> Result<f64, String> {
-        let sum_n = &self.n + &other.n;
-        let distance = &self.n.dot(&self.ln_n_over_total.clone())
-            + &other.n.dot(&other.ln_n_over_total.clone())
-            - &sum_n.dot(
-                &(sum_n
-                    .mapv(|x| x.ln() - (self.total + other.total).ln())
-                    .clone()),
-            );
+        let n_s_t = n1 + n2;
+        let total_s_t = self.total + other.total;
+        let ln_s_t = (&n_s_t / total_s_t).mapv(f64::ln); // ln(n_s_t / total_s_t)
+        let distance = n1.dot(ln1) + n2.dot(ln2) - n_s_t.dot(&ln_s_t);
+
         Ok(distance)
     }
 
-    fn combine(&self, other: &Self, id: usize, distance: Option<f64>) -> Result<Self, String> {
-        let n_s_t = &self.n + &other.n;
+    fn fuse(&self, other: &Self, id: NodeId, distance: Option<f64>) -> Result<Self> {
+        let n1 = &self.n;
+        let n2 = &other.n;
+        let n_s_t = n1 + n2;
         let total_s_t = self.total + other.total;
-        let ln_n_over_total_s_t = n_s_t.mapv(|x| (x / total_s_t).ln());
+
+        let ln_s_t = (&n_s_t / total_s_t).mapv(f64::ln); // ln(n_s_t / total_s_t)
 
         let distance = match distance {
             Some(d) => d,
@@ -105,19 +108,19 @@ impl Node for MultinomialNode {
         Ok(MultinomialNode::new(
             id,
             self.height + other.height + distance,
+            self.count + other.count,
             Some(Box::new(self.clone())),
             Some(Box::new(other.clone())),
             n_s_t,
             total_s_t,
-            ln_n_over_total_s_t,
+            ln_s_t,
         ))
     }
 
     fn __repr__(&self) -> String {
         format!(
-            "Multinomial node {{ id: {}, height: {}, left_child_id: {:?}, right_child_id: {:?}, n: {:?}, total: {}, ln_n_over_total: {:?} }}",
-            self.id, self.height, self.get_left_child_id(), self.get_right_child_id(), self.n, self.total, self.ln_n_over_total
+            "Multinomial node {{ id: {}, height: {}, count: {}, left_child_id: {:?}, right_child_id: {:?}, n: {:?}, total: {}, ln_n_over_total: {:?} }}",
+            self.id, self.height, self.count, self.get_left_child_id(), self.get_right_child_id(), self.n, self.total, self.ln_n_over_total
         )
     }
 }
-

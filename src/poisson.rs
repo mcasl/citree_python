@@ -1,13 +1,14 @@
-
-use crate::Node;
+use crate::{Node, NodeCount, NodeId};
+use anyhow::Result;
 
 // -------------------------- PoissonNode --------------------------
 
 #[derive(Debug, Clone)]
 pub struct PoissonNode {
-    id: usize,
+    id: NodeId,
     height: f64,
-    left_child:  Option<Box<PoissonNode>>,
+    count: NodeCount,
+    left_child: Option<Box<PoissonNode>>,
     right_child: Option<Box<PoissonNode>>,
     n: f64,
     total: f64,
@@ -17,8 +18,9 @@ pub struct PoissonNode {
 // Poisson Node Methods
 impl PoissonNode {
     pub fn new(
-        id: usize,
+        id: NodeId,
         height: f64,
+        count: NodeCount,
         left_child: Option<Box<PoissonNode>>,
         right_child: Option<Box<PoissonNode>>,
         n: f64,
@@ -28,6 +30,7 @@ impl PoissonNode {
         PoissonNode {
             id,
             height,
+            count,
             left_child,
             right_child,
             n,
@@ -47,16 +50,19 @@ impl PoissonNode {
     pub fn get_ln_n_over_total(&self) -> f64 {
         self.ln_n_over_total
     }
-
 }
 
 impl Node for PoissonNode {
-    fn get_id(&self) -> usize {
+    fn get_id(&self) -> NodeId {
         self.id
     }
 
     fn get_height(&self) -> f64 {
         self.height
+    }
+
+    fn get_count(&self) -> NodeCount {
+        self.count
     }
 
     fn get_left_child(&self) -> &Option<Box<Self>> {
@@ -67,25 +73,28 @@ impl Node for PoissonNode {
         &self.right_child
     }
 
-
-
-
-    fn distance(&self, other: &Self) -> Result<f64, String> {
+    fn distance(&self, other: &Self) -> Result<f64> {
         let n1 = self.n;
         let n2 = other.n;
+
         let total1 = self.total;
         let total2 = other.total;
+
         let ln1 = self.ln_n_over_total;
         let ln2 = other.ln_n_over_total;
 
-        let distance = n1 * ln1 + n2 * ln2 - (n1 + n2).ln() + (total1 + total2).ln();
+        let n_s_t = n1 + n2;
+        let total_s_t = total1 + total2;
+        let ln_s_t = f64::ln(n_s_t / total_s_t);
+
+        let distance = n1 * ln1 + n2 * ln2 - n_s_t * ln_s_t;
         Ok(distance)
     }
 
-    fn combine(&self, other: &Self, id: usize, distance: Option<f64>) -> Result<Self, String> {
+    fn fuse(&self, other: &Self, id: NodeId, distance: Option<f64>) -> Result<Self> {
         let n_s_t = self.n + other.n;
         let total_s_t = self.total + other.total;
-        let ln_n_over_total_s_t = (n_s_t / total_s_t).ln();
+        let ln_n_over_total_s_t = f64::ln(n_s_t / total_s_t);
 
         let distance = match distance {
             Some(d) => d,
@@ -95,6 +104,7 @@ impl Node for PoissonNode {
         Ok(PoissonNode::new(
             id,
             self.height + other.height + distance,
+            self.count + other.count,
             Some(Box::new(self.clone())),
             Some(Box::new(other.clone())),
             n_s_t,
@@ -105,9 +115,8 @@ impl Node for PoissonNode {
 
     fn __repr__(&self) -> String {
         format!(
-            "Poisson node {{ id: {}, height: {}, left_child: {:?}, right_child: {:?}, n: {}, total: {}, ln_n_over_total: {} }}",
-            self.id, self.height, self.get_left_child_id(), self.get_right_child_id(), self.n, self.total, self.ln_n_over_total
+            "Poisson node {{ id: {}, height: {}, count: {}, left_child: {:?}, right_child: {:?}, n: {}, total: {}, ln_n_over_total: {} }}",
+            self.id, self.height, self.count, self.get_left_child_id(), self.get_right_child_id(), self.n, self.total, self.ln_n_over_total
         )
     }
 }
-

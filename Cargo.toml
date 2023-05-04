@@ -26,6 +26,8 @@ rustflags = [
 #]
 
 [dependencies]
+anyhow = "1.0.71"
+cargo-tarpaulin = "0.25.2"
 ndarray = "0.15.6"
 ndarray-linalg = {version = "0.16.0", features=["openblas"]}
 numpy = "0.18.0"
