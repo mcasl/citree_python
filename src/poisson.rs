@@ -3,7 +3,7 @@ use anyhow::Result;
 
 // -------------------------- PoissonNode --------------------------
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PoissonNode {
     id: NodeId,
     height: f64,
@@ -65,12 +65,18 @@ impl Node for PoissonNode {
         self.count
     }
 
-    fn get_left_child(&self) -> &Option<Box<Self>> {
-        &self.left_child
+    fn get_left_child(&self) -> Option<&Self> {
+        match &self.left_child {
+            Some(child) => Some(child),
+            None => None,
+        }
     }
 
-    fn get_right_child(&self) -> &Option<Box<Self>> {
-        &self.right_child
+    fn get_right_child(&self) -> Option<&Self> {
+        match &self.right_child {
+            Some(child) => Some(child),
+            None => None,
+        }
     }
 
     fn distance(&self, other: &Self) -> Result<f64> {
@@ -91,7 +97,7 @@ impl Node for PoissonNode {
         Ok(distance)
     }
 
-    fn fuse(&self, other: &Self, id: NodeId, distance: Option<f64>) -> Result<Self> {
+    fn merge(&self, other: &Self, id: NodeId, distance: Option<f64>) -> Result<Self> {
         let n_s_t = self.n + other.n;
         let total_s_t = self.total + other.total;
         let ln_n_over_total_s_t = f64::ln(n_s_t / total_s_t);
@@ -104,7 +110,7 @@ impl Node for PoissonNode {
         Ok(PoissonNode::new(
             id,
             self.height + other.height + distance,
-            self.count + other.count,
+            NodeCount(*self.count + *other.count),
             Some(Box::new(self.clone())),
             Some(Box::new(other.clone())),
             n_s_t,

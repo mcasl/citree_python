@@ -2,12 +2,12 @@ use ndarray;
 use ndarray::{Array1, Array2};
 use ndarray_linalg::Inverse;
 
-use crate::{Node, NodeCount, NodeId};
+use crate::{Error, Node, NodeCount, NodeId};
 use anyhow::Result;
 
 // -------------------------- NormalNode --------------------------
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct NormalNode {
     id: NodeId,
     height: f64,
@@ -69,15 +69,21 @@ impl Node for NormalNode {
         self.count
     }
 
-    fn get_left_child(&self) -> &Option<Box<Self>> {
-        &self.left_child
+    fn get_left_child(&self) -> Option<&Self> {
+        match self.left_child {
+            Some(ref left_child) => Some(left_child),
+            None => None,
+        }
     }
 
-    fn get_right_child(&self) -> &Option<Box<Self>> {
-        &self.right_child
+    fn get_right_child(&self) -> Option<&Self> {
+        match self.right_child {
+            Some(ref right_child) => Some(right_child),
+            None => None,
+        }
     }
 
-    fn fuse(&self, other: &Self, id: NodeId, distance: Option<f64>) -> Result<Self> {
+    fn merge(&self, other: &Self, id: NodeId, distance: Option<f64>) -> Result<Self> {
         let inv_v_s_t = &self.inv_v + &other.inv_v;
         let v_s_t = inv_v_s_t.inv()?;
 
@@ -89,7 +95,7 @@ impl Node for NormalNode {
         Ok(NormalNode::new(
             id,
             self.height + other.height + distance,
-            self.count + other.count,
+            NodeCount(*self.count + *other.count),
             Some(Box::new(self.clone())),
             Some(Box::new(other.clone())),
             v_s_t.dot(&(self.inv_v.dot(&self.x) + other.inv_v.dot(&other.x))),

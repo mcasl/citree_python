@@ -14,21 +14,10 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        cluster_bins,
-        //cluster_multinomial_nodes,
-        //cluster_normal_nodes,
-        //cluster_poisson_nodes,
-        create_nodepairs_sorted_list,
-        multinomial::MultinomialNode,
-        normal::NormalNode,
-        poisson::PoissonNode,
-        pynodes::Array1Wrapper,
-        pynodes::Array2Wrapper,
-        pynodes::PyNormalNode,
-        Node,
-        NodeCount,
-        NodeId,
-        NodePair,
+        cluster_bins, create_nodepairs_sorted_list, get_whole_tree_ids,
+        multinomial::MultinomialNode, normal::NormalNode, poisson::PoissonNode,
+        pynodes::Array1Wrapper, pynodes::Array2Wrapper, pynodes::PyNormalNode, Node, NodeCount,
+        NodeId, NodePair,
     };
     use pyo3::prelude::*;
 
@@ -43,11 +32,11 @@ mod tests {
                 1,
                 0.0,
                 1,
-                None,
-                None,
                 Array1Wrapper(arr1(&[1.0, 1.0])),
                 Array2Wrapper(arr2(&[[2.0, 0.0], [0.0, 2.0]])),
                 Array2Wrapper(arr2(&[[0.5, 0.0], [0.0, 0.5]])),
+                None,
+                None,
             );
 
             let py_normal_node = py_normal_node.into_py(py);
@@ -69,7 +58,7 @@ mod tests {
     fn get_tree_ids_with_no_children() {
         // create a node with no children and verify the resulting vec contains just it's id
         let node = PoissonNode::new(NodeId(7), 0.0, NodeCount(1), None, None, 6.0, 6.0, 0.0);
-        let tree_ids = node.get_tree_ids();
+        let tree_ids = get_whole_tree_ids(node);
         assert_eq!(vec![NodeId(7)], tree_ids);
     }
 
@@ -87,7 +76,7 @@ mod tests {
             6.0,
             0.0,
         );
-        let tree_ids = node_7.get_tree_ids();
+        let tree_ids = get_whole_tree_ids(node_7);
         assert_eq!(vec![NodeId(7), NodeId(5)], tree_ids);
     }
 
@@ -105,7 +94,7 @@ mod tests {
             6.0,
             0.0,
         );
-        let tree_ids = node_7.get_tree_ids();
+        let tree_ids = get_whole_tree_ids(node_7);
         assert_eq!(vec![NodeId(7), NodeId(6)], tree_ids);
     }
 
@@ -125,7 +114,7 @@ mod tests {
             0.0,
         );
 
-        let tree_ids = node_7.get_tree_ids();
+        let tree_ids = get_whole_tree_ids(node_7);
         assert_eq!(vec![NodeId(7), NodeId(5), NodeId(6)], tree_ids);
     }
 
@@ -855,7 +844,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cluster_normal_bins() {
+    fn test_cluster_normal_bins() -> Result<(), anyhow::Error> {
         let node_0 = NormalNode::new(
             NodeId(0),
             0.0,
@@ -900,27 +889,34 @@ mod tests {
             array![[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0],],
         );
 
-        let bins = vec![node_0, node_1, node_2, node_3];
+        let bins = vec![
+            node_0.clone(),
+            node_1.clone(),
+            node_2.clone(),
+            node_3.clone(),
+        ];
 
-        let linkage_matrix = cluster_bins(&bins);
+        let (linkage_matrix, dendrogram) = cluster_bins(&bins)?;
 
-        match linkage_matrix {
-            Ok(linkage_matrix) => {
-                let expected_linkage_matrix = array![
-                    [0.0, 3.0, 10.0, 2.0],
-                    [2.0, 4.0, 20.0, 3.0],
-                    [1.0, 5.0, 35.833333333333336, 4.0],
-                ];
+        let expected_linkage_matrix = array![
+            [0.0, 3.0, 10.0, 2.0],
+            [2.0, 4.0, 20.0, 3.0],
+            [1.0, 5.0, 35.833333333333336, 4.0],
+        ];
 
-                assert_eq!(linkage_matrix, expected_linkage_matrix);
-                //assert!(linkage_matrix.iter().eq(expected_linkage_matrix.iter()));
-            }
-            Err(_) => panic!("Error clustering bins"),
-        };
+        assert_eq!(linkage_matrix, expected_linkage_matrix);
+
+        let node_4 = node_0.merge(&node_3, NodeId(4), None)?;
+        let node_5 = node_2.merge(&node_4, NodeId(5), None)?;
+        let expected_dendrogram = node_1.merge(&node_5, NodeId(6), None)?;
+
+        assert_eq!(dendrogram, expected_dendrogram);
+
+        Ok(())
     }
 
     #[test]
-    fn test_cluster_poisson_bins() {
+    fn test_cluster_poisson_bins() -> Result<(), anyhow::Error> {
         let node_0 = PoissonNode::new(
             NodeId(0),
             0.0,
@@ -962,27 +958,34 @@ mod tests {
             0.001_f64.ln(),
         );
 
-        let bins = vec![node_0, node_1, node_2, node_3];
+        let bins = vec![
+            node_0.clone(),
+            node_1.clone(),
+            node_2.clone(),
+            node_3.clone(),
+        ];
 
-        let linkage_matrix = cluster_bins(&bins);
+        let (linkage_matrix, dendrogram) = cluster_bins(&bins)?;
 
-        match linkage_matrix {
-            Ok(linkage_matrix) => {
-                let expected_linkage_matrix = array![
-                    [0.0, 1.0, 1.106911091482805, 2.0],
-                    [2.0, 3.0, 1.1069110914828055, 2.0],
-                    [4.0, 5.0, 8.691375156114688, 4.0],
-                ];
+        let expected_linkage_matrix = array![
+            [0.0, 1.0, 1.106911091482805, 2.0],
+            [2.0, 3.0, 1.1069110914828055, 2.0],
+            [4.0, 5.0, 8.691375156114688, 4.0],
+        ];
 
-                assert_eq!(linkage_matrix, expected_linkage_matrix);
-                //assert!(linkage_matrix.iter().eq(expected_linkage_matrix.iter()));
-            }
-            Err(_) => panic!("Error clustering bins"),
-        };
+        assert_eq!(linkage_matrix, expected_linkage_matrix);
+
+        let node_4 = node_0.merge(&node_1, NodeId(4), None)?;
+        let node_5 = node_2.merge(&node_3, NodeId(5), None)?;
+        let expected_dendrogram = node_4.merge(&node_5, NodeId(6), None)?;
+
+        assert_eq!(dendrogram, expected_dendrogram);
+
+        Ok(())
     }
 
     #[test]
-    fn test_cluster_multinomial_bins() {
+    fn test_cluster_multinomial_bins() -> Result<(), anyhow::Error> {
         let epsilon = 1e-6;
         let n0 = array![epsilon, epsilon, 2.0];
         let n1 = array![epsilon, 1.0, 2.0];
@@ -1008,22 +1011,29 @@ mod tests {
         let node_3 =
             MultinomialNode::new(NodeId(3), 0.0, NodeCount(1), None, None, n3, total3, ln3);
 
-        let bins = vec![node_0, node_1, node_2, node_3];
+        let bins = vec![
+            node_0.clone(),
+            node_1.clone(),
+            node_2.clone(),
+            node_3.clone(),
+        ];
 
-        let linkage_matrix = cluster_bins(&bins);
+        let (linkage_matrix, dendrogram) = cluster_bins(&bins)?;
 
-        match linkage_matrix {
-            Ok(linkage_matrix) => {
-                let expected_linkage_matrix = array![
-                    [0.0, 1.0, 0.5924557544079021, 2.0],
-                    [2.0, 4.0, 2.955983061770836, 3.0],
-                    [3.0, 5.0, 7.058627648272106, 4.0],
-                ];
+        let expected_linkage_matrix = array![
+            [0.0, 1.0, 0.5924557544079021, 2.0],
+            [2.0, 4.0, 2.955983061770836, 3.0],
+            [3.0, 5.0, 7.058627648272106, 4.0],
+        ];
 
-                assert_eq!(linkage_matrix, expected_linkage_matrix);
-                //assert!(linkage_matrix.iter().eq(expected_linkage_matrix.iter()));
-            }
-            Err(_) => panic!("Error clustering bins"),
-        };
+        assert_eq!(linkage_matrix, expected_linkage_matrix);
+
+        let node_4 = node_0.merge(&node_1, NodeId(4), None)?;
+        let node_5 = node_2.merge(&node_4, NodeId(5), None)?;
+        let expected_dendrogram = node_3.merge(&node_5, NodeId(6), None)?;
+
+        assert_eq!(dendrogram, expected_dendrogram);
+
+        Ok(())
     }
 }
