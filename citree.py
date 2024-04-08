@@ -197,7 +197,7 @@ def calculate_Normal_distance(Bs: NormalBin, Bt: NormalBin) -> float:
     diff = Bs.x - Bt.x
 
     # Calculate the combined variance
-    combined_V = np.linalg.inv(Bs.V + Bt.V)
+    combined_V = np.linalg.inv(Bs.inv_V + Bt.inv_V)
 
     # Return the distance
     return diff.T @ combined_V @ diff  # type: ignore
