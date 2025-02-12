@@ -17,7 +17,6 @@ kiwisolver==1.4.4
 markdown-it-py==2.2.0
 matplotlib==3.7.1
 matplotlib-inline==0.1.6
-maturin==0.14.17
 mdurl==0.1.2
 mypy==1.2.0
 mypy-extensions==1.0.0
