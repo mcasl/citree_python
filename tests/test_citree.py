@@ -287,7 +287,7 @@ class TestHierarchicalClustering(unittest.TestCase):
 		dendrogram_classes = get_tree_ids_from(node_list[0])
 		# print(f'dendrogram_classes: {dendrogram_classes}')
 		# Compare the bin labels and the dendrogram classes
-		self.assertEqual(set(dendrogram_classes), set(self.clusters))
+		self.assertEqual(first=set(self.clusters), second=set(dendrogram_classes))
 		
 		# Compare the class labels and the observations in the bins
 		
@@ -413,7 +413,7 @@ class TestTrees(unittest.TestCase):
 				V=np.eye(2),
 				inv_V=np.eye(2)
 		)
-		assert get_tree_ids_from(root) == [1, 2]  # Only left_child exists
+		assert get_tree_ids_from(root) == [2]  # Only left_child exists
 	
 	def test_get_tree_ids_from_right_subtree(self):
 		# Right subtree
@@ -437,7 +437,7 @@ class TestTrees(unittest.TestCase):
 				V=np.eye(2),
 				inv_V=np.eye(2)
 		)
-		assert get_tree_ids_from(root) == [1, 3]  # Only right_child exists
+		assert get_tree_ids_from(root) == [3]  # Only right_child exists
 	
 	def test_get_tree_ids_from_balanced_tree(self):
 		# Balanced tree with left and right children
@@ -471,7 +471,7 @@ class TestTrees(unittest.TestCase):
 				V=np.eye(2),
 				inv_V=np.eye(2)
 		)
-		assert get_tree_ids_from(root) == [1, 2, 3]  # Both children are present
+		assert get_tree_ids_from(root) == [2, 3]  # Both children are present
 	
 	def test_get_tree_ids_from_none_node(self):
 		# If the node is None, the function should return an empty list

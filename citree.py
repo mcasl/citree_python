@@ -153,8 +153,8 @@ def stage_1_fast_clustering_kmeans(
 				left=None,
 				right=None,
 				x=np.mean(cluster_data, axis=0),
-				                                     V=(V := np.cov(cluster_data.T)),
-				                                     inv_V=np.linalg.inv(V + 1e-6 * np.eye(V.shape[0])), )
+				V=(V := np.cov(cluster_data.T)),
+				inv_V=np.linalg.inv(V + 1e-6 * np.eye(V.shape[0])), )
 		)
 	return {"leaf_bins": nodes, "clusters": clusters}
 
@@ -172,11 +172,13 @@ class NormalPair:
 	node_s: NormalNode = field(compare=False)
 	node_t: NormalNode = field(compare=False)
 
+
 @dataclass(order=True, frozen=True)
 class PoissonPair:
 	distance: float  # distance between the nodes s and t
 	node_s: PoissonNode = field(compare=False)
 	node_t: PoissonNode = field(compare=False)
+
 
 @dataclass(order=True, frozen=True)
 class MultinomialPair:
@@ -185,8 +187,23 @@ class MultinomialPair:
 	node_t: MultinomialNode = field(compare=False)
 
 
-def get_tree_ids_from(node: Node) -> List[Union[int, float]]:
-	# Get the left nodes
+def is_valid_node(node) -> bool:
+	"""
+    Check if the given node is valid based on accepted types for the tree structure.
+    Extend this to include additional valid types as needed.
+    """
+	# Accepted node types (extendable in the future)
+	ValidNodeTypes = (NormalNode, PoissonNode, MultinomialNode)
+	
+	# None is valid for missing children
+	if node is None:
+		return True
+	
+	# Check if node is of a valid type
+	return isinstance(node, ValidNodeTypes)
+
+	
+def get_tree_ids_from_recursive(node: Optional[Node]) -> List[Union[int, float]]:
 	if node is None:
 		return []
 	left_ids = [] if node.left is None else get_tree_ids_from(node.left)
@@ -195,9 +212,32 @@ def get_tree_ids_from(node: Node) -> List[Union[int, float]]:
 	# Get the ids
 	ids = left_ids + right_ids
 	# Return the ids if there are any, else return the node id
-	return [node.id] + left_ids + right_ids
+	return ids if len(ids) > 0 else [node.id]
 
 
+def get_tree_ids_from(node: Optional[Node]) -> List[Union[int, float]]:
+	if node is None:
+		return []
+	
+	stack = [node]  # Initialize stack with the root node
+	ids = []  # List to store the collected IDs
+	
+	while stack:
+		current = stack.pop()
+		
+		# Check if the current node is a leaf
+		if current.left is None and current.right is None:
+			ids.append(current.id)  # Add leaf node ID to result
+		else:
+			# Push right child first (if it exists) to visit it later
+			if current.right is not None and is_valid_node(current.right):
+				stack.append(current.right)
+			# Push left child (if it exists) to visit it next
+			if current.left is not None and is_valid_node(current.left):
+				stack.append(current.left)
+	
+	# Return the IDs collected (all leaf nodes)
+	return ids
 
 
 @singledispatch
@@ -298,21 +338,26 @@ def _(node_pair: MultinomialPair, id_number: int) -> MultinomialNode:
 	                       right=Bt,
 	                       n=Bs.n + Bt.n, )
 
+
 @singledispatch
 def make_node_pair(distance: float, node_s: Node, node_t: Node):
 	raise NotImplementedError("Unsupported type for nodes")
+
 
 @make_node_pair.register
 def _(node_s: NormalNode, node_t: NormalNode, distance: float) -> NormalPair:
 	return NormalPair(distance, node_s, node_t)
 
+
 @make_node_pair.register
 def _(node_s: MultinomialNode, node_t: MultinomialNode, distance: float) -> MultinomialPair:
 	return MultinomialPair(distance, node_s, node_t)
 
+
 @make_node_pair.register
 def _(node_s: PoissonNode, node_t: PoissonNode, distance: float, ) -> PoissonPair:
 	return PoissonPair(distance, node_s, node_t)
+
 
 def hierarchical_clustering(bins: List[Node]) -> Tuple[List[Node], ndarray]:
 	node_pairs = SortedList()
