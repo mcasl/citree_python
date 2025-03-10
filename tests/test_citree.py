@@ -11,7 +11,7 @@ from scipy.cluster.hierarchy import fcluster
 sys.path.append(os.path.abspath(os.path.join('..')))
 
 from citree import (Node, NormalPair, PoissonPair, MultinomialPair,
-                    NormalBin, PoissonBin, MultinomialBin,
+                    NormalParams, PoissonParams, MultinomialParams,
                     stage_1_fast_clustering_strategies,
                     stage_2_strategies,
                     stage_1_fast_clustering_kmeans,
@@ -23,7 +23,7 @@ from citree import (Node, NormalPair, PoissonPair, MultinomialPair,
                     calculate_Multinomial_distance,
                     hierarchical_clustering,
 	# plot_dendrogram,
-	                cut_tree,
+                    cut_tree,
                     )
 
 
@@ -123,29 +123,29 @@ class TestNormalCitree(unittest.TestCase):
 		inv_V1 = np.linalg.inv(V1)
 		inv_V2 = np.linalg.inv(V2)
 		
-		bin1 = NormalBin(node=Node(id=1, height=1, count=2, left=None, right=None),
-		                 x=np.array([1, 2]),
-		                 V=V1,
-		                 inv_V=inv_V1,
-		                 )
+		bin1 = NormalParams(node=Node(id=1, height=1, count=2, left=None, right=None),
+		                    x=np.array([1, 2]),
+		                    V=V1,
+		                    inv_V=inv_V1,
+		                    )
 		
-		bin2 = NormalBin(node=Node(id=2, height=1, count=3, left=None, right=None),
-		                 x=np.array([3, 4]),
-		                 V=V2,
-		                 inv_V=inv_V2,
-		                 )
+		bin2 = NormalParams(node=Node(id=2, height=1, count=3, left=None, right=None),
+		                    x=np.array([3, 4]),
+		                    V=V2,
+		                    inv_V=inv_V2,
+		                    )
 		
-		expected_new_bin = NormalBin(node=Node(id=3,
-		                                       height=4.827586206896552,
-		                                       count=5,
-		                                       left=bin1.node,
-		                                       right=bin2.node),
-		                             x=np.array([1.82758621, 2.96551724]),
-		                             V=np.array([[1.17241379, 1.03448276],
+		expected_new_bin = NormalParams(node=Node(id=3,
+		                                          height=4.827586206896552,
+		                                          count=5,
+		                                          left=bin1.node,
+		                                          right=bin2.node),
+		                                x=np.array([1.82758621, 2.96551724]),
+		                                V=np.array([[1.17241379, 1.03448276],
 		                                         [1.03448276, 2.20689655]]),
-		                             inv_V=np.array([[1.45454545, -0.68181818],
+		                                inv_V=np.array([[1.45454545, -0.68181818],
 		                                             [-0.68181818, 0.77272727]]),
-		                             )
+		                                )
 		
 		new_bin_pair = NormalPair(distance=2.8275862068965516, bin_s=bin1, bin_t=bin2)
 		new_bin = calculate_normal_fusion_representative(new_bin_pair, id=3)
@@ -226,39 +226,39 @@ class TestHierarchicalClustering(unittest.TestCase):
 
 class TestPoisson(unittest.TestCase):
 	def test_calculate_poisson_distance(self):
-		node_1 = PoissonBin(node=Node(id=1,
-		                              height=0,
-		                              count=1,
-		                              left=None,
-		                              right=None),
-		                    n=3,
-		                    N=5)
-		node_2 = PoissonBin(node=Node(id=2,
-		                              height=0,
-		                              count=1,
-		                              left=None,
-		                              right=None),
-		                    n=2,
-		                    N=10)
+		node_1 = PoissonParams(node=Node(id=1,
+		                                 height=0,
+		                                 count=1,
+		                                 left=None,
+		                                 right=None),
+		                       n=3,
+		                       N=5)
+		node_2 = PoissonParams(node=Node(id=2,
+		                                 height=0,
+		                                 count=1,
+		                                 left=None,
+		                                 right=None),
+		                       n=2,
+		                       N=10)
 		expected_result = 0.741709
 		result = calculate_Poisson_distance(node_1, node_2)
 		self.assertEqual(round(result, 6), expected_result)
 	
 	def test_calculate_Poisson_node_fusion_representative(self):
-		node_s = PoissonBin(node=Node(id=1,
-		                              height=1.5,
-		                              count=30,
-		                              left=None,
-		                              right=None),
-		                    n=2,
-		                    N=3)
-		node_t = PoissonBin(node=Node(id=2,
-		                              height=4.0,
-		                              count=43,
-		                              left=None,
-		                              right=None),
-		                    n=4,
-		                    N=9)
+		node_s = PoissonParams(node=Node(id=1,
+		                                 height=1.5,
+		                                 count=30,
+		                                 left=None,
+		                                 right=None),
+		                       n=2,
+		                       N=3)
+		node_t = PoissonParams(node=Node(id=2,
+		                                 height=4.0,
+		                                 count=43,
+		                                 left=None,
+		                                 right=None),
+		                       n=4,
+		                       N=9)
 		node_pair = PoissonPair(bin_s=node_s,
 		                        bin_t=node_t,
 		                        distance=6.0)
@@ -272,33 +272,33 @@ class TestPoisson(unittest.TestCase):
 		self.assertEqual(result_bin.node.height, 11.5)
 		self.assertEqual(result_bin.node.count, 73)
 		if result_bin.node.left is not None:
-			self.assertEqual(result_bin.node.left.bin, node_pair.bin_s)
+			self.assertEqual(result_bin.node.left.distribution_parameters, node_pair.bin_s)
 		if result_bin.node.right is not None:
-			self.assertEqual(result_bin.node.right.bin, node_pair.bin_t)
+			self.assertEqual(result_bin.node.right.distribution_parameters, node_pair.bin_t)
 		self.assertEqual(result_bin.n, 6)
 		self.assertEqual(result_bin.N, 12)
 
 
 class TestMultinomial(unittest.TestCase):
 	def test_calculate_Multinomial_distance_1(self):
-		Bs = MultinomialBin(node=Node(id=1, height=0, count=1, left=None, right=None),
-		                    n=np.array([2, 1])
-		                    )
-		Bt = MultinomialBin(node=Node(id=2, height=0, count=1, left=None, right=None),
-		                    n=np.array([1, 2])
-		                    )
+		Bs = MultinomialParams(node=Node(id=1, height=0, count=1, left=None, right=None),
+		                       n=np.array([2, 1])
+		                       )
+		Bt = MultinomialParams(node=Node(id=2, height=0, count=1, left=None, right=None),
+		                       n=np.array([1, 2])
+		                       )
 		expected = 0.33979807359079395
 		actual = calculate_Multinomial_distance(Bs=Bs, Bt=Bt)
 		self.assertAlmostEqual(actual, expected, places=7)
 	
 	def test_calculate_Multinomial_distance_2(self):
-		Bs = MultinomialBin(node=Node(id=1, height=0, count=1, left=None, right=None),
-		                    n=np.array([5, 10])
-		                    )
+		Bs = MultinomialParams(node=Node(id=1, height=0, count=1, left=None, right=None),
+		                       n=np.array([5, 10])
+		                       )
 		
-		Bt = MultinomialBin(node=Node(id=2, height=0, count=1, left=None, right=None),
-		                    n=np.array([15, 5])
-		                    )
+		Bt = MultinomialParams(node=Node(id=2, height=0, count=1, left=None, right=None),
+		                       n=np.array([15, 5])
+		                       )
 		
 		expected = 3.1073682477181492
 		actual = calculate_Multinomial_distance(Bs, Bt)
@@ -306,54 +306,54 @@ class TestMultinomial(unittest.TestCase):
 	
 	def test_calculate_Multinomial_node_fusion_representative(self):
 		# Test case 1:
-		bin_s = MultinomialBin(node=Node(id=1,
-		                                 height=10,
-		                                 count=25,
-		                                 left=None, right=None),
-		                       n=np.array([2, 3, 1])
-		                       )
+		bin_s = MultinomialParams(node=Node(id=1,
+		                                    height=10,
+		                                    count=25,
+		                                    left=None, right=None),
+		                          n=np.array([2, 3, 1])
+		                          )
 		
-		node_t = MultinomialBin(node=Node(id=2,
-		                                  height=15,
-		                                  count=52,
-		                                  left=None,
-		                                  right=None),
-		                        n=np.array([1, 2, 4])
-		                        )
+		node_t = MultinomialParams(node=Node(id=2,
+		                                     height=15,
+		                                     count=52,
+		                                     left=None,
+		                                     right=None),
+		                           n=np.array([1, 2, 4])
+		                           )
 		
 		node_pair = MultinomialPair(bin_s=bin_s,
 		                            bin_t=node_t,
 		                            distance=7)
 		id_ = 3
-		expected_bin = MultinomialBin(node=Node(id=3,
-		                                        height=32,
-		                                        count=77,
-		                                        left=bin_s.node,
-		                                        right=node_t.node),
-		                              n=np.array([3, 5, 5])
-		                              )
+		expected_bin = MultinomialParams(node=Node(id=3,
+		                                           height=32,
+		                                           count=77,
+		                                           left=bin_s.node,
+		                                           right=node_t.node),
+		                                 n=np.array([3, 5, 5])
+		                                 )
 		
 		actual_node = calculate_multinomial_fusion_representative(node_pair, id_)
 		self.assertEqual(actual_node, expected_bin)
 		
 		# Test case 2:
-		bin_s = MultinomialBin(node=Node(id=4, height=14, count=1, left=None, right=None),
-		                       n=np.array([3, 6, 4])
-		                       )
-		bin_t = MultinomialBin(node=Node(id=5, height=18, count=1, left=None, right=None),
-		                       n=np.array([2, 5, 4])
-		                       )
+		bin_s = MultinomialParams(node=Node(id=4, height=14, count=1, left=None, right=None),
+		                          n=np.array([3, 6, 4])
+		                          )
+		bin_t = MultinomialParams(node=Node(id=5, height=18, count=1, left=None, right=None),
+		                          n=np.array([2, 5, 4])
+		                          )
 		node_pair = MultinomialPair(bin_s=bin_s,
 		                            bin_t=bin_t,
 		                            distance=9)
 		id_ = 7
-		expected_bin = MultinomialBin(node=Node(id=7,
-		                                        height=41,
-		                                        count=2,
-		                                        left=bin_s.node,
-		                                        right=bin_t.node),
-		                              n=np.array([5, 11, 8])
-		                              )
+		expected_bin = MultinomialParams(node=Node(id=7,
+		                                           height=41,
+		                                           count=2,
+		                                           left=bin_s.node,
+		                                           right=bin_t.node),
+		                                 n=np.array([5, 11, 8])
+		                                 )
 		
 		actual_node = calculate_multinomial_fusion_representative(node_pair, id_)
 		self.assertEqual(actual_node, expected_bin)

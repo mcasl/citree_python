@@ -34,8 +34,8 @@ from sklearn.cluster import KMeans
 from sortedcontainers import SortedList
 
 # define distribution as a new type consisting of the three possible distributions
-# the quotes are needed to avoid circular imports (porque se definen más abajo)
-Bin = Union["NormalBin", "PoissonBin", "MultinomialBin"]
+# the quotes are needed to avoid circular imports (as they are defined later below)
+DistributionParameters = Union["NormalParams", "PoissonParams", "MultinomialParams"]
 
 
 @dataclass
@@ -45,7 +45,7 @@ class Node:
 	count: int
 	left: Optional[Node]
 	right: Optional[Node]
-	bin: Optional[Bin] = None
+	distribution_parameters: Optional[DistributionParameters] = None
 	
 	def __post_init__(self):
 		if self.height < 0:
@@ -55,14 +55,14 @@ class Node:
 
 
 @dataclass
-class NormalBin:
+class NormalParams:
 	node: Node
 	x: ndarray
 	V: ndarray
 	inv_V: ndarray
 	
 	def __post_init__(self):
-		self.node.bin = self
+		self.node.distribution_parameters = self
 		if self.V.shape[0] != self.V.shape[1]:
 			raise ValueError("Variance-covariance matrix must be square")
 		if self.x.shape[0] != self.V.shape[0]:
@@ -93,14 +93,14 @@ class NormalBin:
 
 
 @dataclass
-class PoissonBin:
+class PoissonParams:
 	node: Node
 	n: float
 	N: float
 	
 	def __post_init__(self):
 		self.ln_n_over_N = log(self.n / self.N)
-		self.node.bin = self
+		self.node.distribution_parameters = self
 
 	def __eq__(self, other):
 		if not isinstance(other, self.__class__):
@@ -108,14 +108,14 @@ class PoissonBin:
 		return (self.n == other.n) and (self.N == other.N)
 
 @dataclass
-class MultinomialBin:
+class MultinomialParams:
 	node: Node
 	n: ndarray
 	
 	def __post_init__(self):
 		self.N = self.n.sum()
 		self.ln_n_over_N = np.log(self.n / self.N)
-		self.node.bin = self
+		self.node.distribution_parameters = self
 	
 	def __eq__(self, other):
 		if not isinstance(other, self.__class__):
@@ -139,7 +139,7 @@ def stage_1_fast_clustering_kmeans(
 			continue
 		cluster_data = data[clusters == cluster, :]
 		nodes.append(
-				NormalBin(
+				NormalParams(
 						node=Node(
 								id=cluster,
 								height=0.0,
@@ -165,22 +165,22 @@ stage_1_fast_clustering_strategies = {
 @dataclass(order=True)
 class NormalPair:
 	distance: float  # distance between the nodes s and t
-	bin_s: NormalBin = field(compare=False)
-	bin_t: NormalBin = field(compare=False)
+	bin_s: NormalParams = field(compare=False)
+	bin_t: NormalParams = field(compare=False)
 
 
 @dataclass(order=True)
 class PoissonPair:
 	distance: float  # distance between the nodes s and t
-	bin_s: PoissonBin = field(compare=False)
-	bin_t: PoissonBin = field(compare=False)
+	bin_s: PoissonParams = field(compare=False)
+	bin_t: PoissonParams = field(compare=False)
 
 
 @dataclass(order=True)
 class MultinomialPair:
 	distance: float  # distance between the nodes s and t
-	bin_s: MultinomialBin = field(compare=False)
-	bin_t: MultinomialBin = field(compare=False)
+	bin_s: MultinomialParams = field(compare=False)
+	bin_t: MultinomialParams = field(compare=False)
 
 
 bin_pair_classes = {
@@ -190,15 +190,15 @@ bin_pair_classes = {
 }
 
 
-def get_tree_ids_from(bin: Optional[Bin]) -> List[Union[int, float]]:
+def get_tree_ids_from(bin: Optional[DistributionParameters]) -> List[Union[int, float]]:
 	# Get the left nodes
 	if bin is None:
 		return []
 	
-	left_ids = [] if bin.node.left is None else get_tree_ids_from(bin.node.left.bin)
+	left_ids = [] if bin.node.left is None else get_tree_ids_from(bin.node.left.distribution_parameters)
 	
 	# Get the right nodes
-	right_ids = [] if bin.node.right is None else get_tree_ids_from(bin.node.right.bin)
+	right_ids = [] if bin.node.right is None else get_tree_ids_from(bin.node.right.distribution_parameters)
 	
 	# Get the ids
 	ids = left_ids + right_ids
@@ -207,7 +207,7 @@ def get_tree_ids_from(bin: Optional[Bin]) -> List[Union[int, float]]:
 	return ids if len(ids) > 0 else [bin.node.id]
 
 
-def calculate_Normal_distance(Bs: NormalBin, Bt: NormalBin) -> float:
+def calculate_Normal_distance(Bs: NormalParams, Bt: NormalParams) -> float:
 	# Calculate the difference between the nodes
 	diff = Bs.x - Bt.x
 	
@@ -218,7 +218,7 @@ def calculate_Normal_distance(Bs: NormalBin, Bt: NormalBin) -> float:
 	return diff.T @ combined_V @ diff  # type: ignore
 
 
-def calculate_Poisson_distance(Bs: PoissonBin, Bt: PoissonBin) -> float:
+def calculate_Poisson_distance(Bs: PoissonParams, Bt: PoissonParams) -> float:
 	return (
 			Bs.n * Bs.ln_n_over_N
 			+ Bt.n * Bt.ln_n_over_N
@@ -226,7 +226,7 @@ def calculate_Poisson_distance(Bs: PoissonBin, Bt: PoissonBin) -> float:
 	)
 
 
-def calculate_Multinomial_distance(Bs: MultinomialBin, Bt: MultinomialBin) -> float:
+def calculate_Multinomial_distance(Bs: MultinomialParams, Bt: MultinomialParams) -> float:
 	# type: ignore
 	return (
 			Bs.n @ Bs.ln_n_over_N
@@ -238,7 +238,7 @@ def calculate_Multinomial_distance(Bs: MultinomialBin, Bt: MultinomialBin) -> fl
 def calculate_normal_fusion_representative(
 		node_pair: NormalPair,
 		id: int,
-) -> NormalBin:
+) -> NormalParams:
 	Bs = node_pair.bin_s
 	Bt = node_pair.bin_t
 	
@@ -255,7 +255,7 @@ def calculate_normal_fusion_representative(
 	height = Bs.node.height + Bt.node.height + node_pair.distance
 	
 	# Return the node
-	return NormalBin(
+	return NormalParams(
 			node=Node(
 					id=id,
 					height=height,
@@ -272,7 +272,7 @@ def calculate_normal_fusion_representative(
 def calculate_poisson_fusion_representative(
 		node_pair: PoissonPair,
 		id: int,
-) -> PoissonBin:
+) -> PoissonParams:
 	"""
 	Calculate the representative of a node pair.
 
@@ -283,7 +283,7 @@ def calculate_poisson_fusion_representative(
 	Returns:
 		The representative of the node pair
 	"""
-	return PoissonBin(
+	return PoissonParams(
 			node=Node(
 					id=id,
 					height=(
@@ -303,8 +303,8 @@ def calculate_poisson_fusion_representative(
 def calculate_multinomial_fusion_representative(
 		node_pair: MultinomialPair,
 		id: int,
-) -> MultinomialBin:
-	return MultinomialBin(
+) -> MultinomialParams:
+	return MultinomialParams(
 			node=Node(
 					id=id,
 					height=(
@@ -345,8 +345,8 @@ stage_2_strategies = {
 
 
 def hierarchical_clustering(
-		bins: List[Bin], stage_2_strategies: Dict
-) -> Tuple[List[Bin], ndarray]:
+		bins: List[DistributionParameters], stage_2_strategies: Dict
+) -> Tuple[List[DistributionParameters], ndarray]:
 	calculate_distance = stage_2_strategies["calculate_distance"]
 	calculate_node_combination = stage_2_strategies["calculate_node_combination"]
 	bin_pair_class = stage_2_strategies["bin_pair_class"]
