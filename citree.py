@@ -166,19 +166,19 @@ stage_1_fast_clustering_strategies = {
 }
 
 
-@dataclass(order=True)
+@dataclass(order=True, frozen=True)
 class NormalPair:
 	distance: float  # distance between the nodes s and t
 	node_s: NormalNode = field(compare=False)
 	node_t: NormalNode = field(compare=False)
 
-@dataclass(order=True)
+@dataclass(order=True, frozen=True)
 class PoissonPair:
 	distance: float  # distance between the nodes s and t
 	node_s: PoissonNode = field(compare=False)
 	node_t: PoissonNode = field(compare=False)
 
-@dataclass(order=True)
+@dataclass(order=True, frozen=True)
 class MultinomialPair:
 	distance: float  # distance between the nodes s and t
 	node_s: MultinomialNode = field(compare=False)
@@ -189,17 +189,15 @@ def get_tree_ids_from(node: Node) -> List[Union[int, float]]:
 	# Get the left nodes
 	if node is None:
 		return []
-	
 	left_ids = [] if node.left is None else get_tree_ids_from(node.left)
-	
 	# Get the right nodes
 	right_ids = [] if node.right is None else get_tree_ids_from(node.right)
-	
 	# Get the ids
 	ids = left_ids + right_ids
-	
 	# Return the ids if there are any, else return the node id
-	return ids if len(ids) > 0 else [node.id]
+	return [node.id] + left_ids + right_ids
+
+
 
 
 @singledispatch

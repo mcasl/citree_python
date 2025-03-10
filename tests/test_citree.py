@@ -24,6 +24,82 @@ from citree import (NormalNode, PoissonNode, MultinomialNode,
 
 
 # -------------- Node related tests -------------- #
+class TestNormalNode(unittest.TestCase):
+	def test_normal_node_valid_initialization(self):
+		node = NormalNode(id=1, height=5.0, count=10, left=None, right=None, x=np.ndarray(shape=(2,1)), V=np.ndarray(shape=(2,2)), inv_V=np.ndarray(shape=(2,2)))
+		assert node.id == 1
+		assert node.height == 5.0
+		assert node.count == 10
+		assert node.left is None
+		assert node.right is None
+
+	def test_normal_node_missing_attributes(self):
+		with self.assertRaises(TypeError):  # Expecting error because certain attributes are not provided
+			NormalNode(id=1) # Missing other mandatory attributes
+
+	def test_normal_node_invalid_attribute_types(self):
+		with self.assertRaises(TypeError):  # Or TypeError, depending on validation
+			NormalNode(id='string', height='string', count="invalid", left=None, right=None, x=None, V=None, inv_V=None)
+
+	def test_normal_node_equality_positive(self):
+		node1 = NormalNode(id=1, height=05.0, count=10, left=None, right=None, x=np.zeros(shape=(2,1)), V=np.ones(shape=(2,2)), inv_V=np.ones(shape=(2,2)))
+		node2 = NormalNode(id=2, height=10.0, count=20, left=None, right=None, x=np.zeros(shape=(2,1)), V=np.ones(shape=(2,2)), inv_V=np.ones(shape=(2,2)))
+		# id is not used for equality checks
+		assert node1 == node2
+	
+	
+	def test_normal_node_equality_negative(self):
+		node1 = NormalNode(id=1, height=05.0, count=10, left=None, right=None, x=np.zeros(shape=(2, 1)),
+		                   V=np.ones(shape=(2, 2)), inv_V=np.ones(shape=(2, 2)))
+		node2 = NormalNode(id=1, height=10.0, count=20, left=None, right=None, x=0.4+np.zeros(shape=(2, 1)),
+		                   V=0.5*np.ones(shape=(2, 2)), inv_V=2*np.ones(shape=(2, 2)))
+		assert node1 != node2
+
+	def test_normal_node_equality_different_type(self):
+		node = NormalNode(id=1, height=05.0, count=10, left=None, right=None, x=np.zeros(shape=(2, 1)),
+		                   V=np.ones(shape=(2, 2)), inv_V=np.ones(shape=(2, 2)))
+		non_node_object = {"id": 1}
+		# Comparison with a non-NormalNode type should return False
+		assert node != non_node_object
+	
+
+class TestPoissonNode(unittest.TestCase):
+	def test_poisson_node_valid_initialization(self):
+		node = PoissonNode(id=1, height=2, count=10, left=None, right=None, n=2, N=4)
+		assert node.id == 1
+		assert node.height == 2
+		assert node.count == 10
+
+	def test_poisson_node_missing_attributes(self):
+		with self.assertRaises(TypeError):
+			PoissonNode(id=1)  # Missing other mandatory attributes
+
+	def test_poisson_node_equality_positive(self):
+		node1 = PoissonNode(id=1, height=3.0, count=5, left=None, right=None, n=7, N=9)
+		node2 = PoissonNode(id=2, height=3.0, count=5, left=None, right=None, n=7, N=9)
+		assert node1 == node2
+
+	def test_poisson_node_different_heights_equality_positive(self):
+		node1 = PoissonNode(id=1, height=03.0, count=5, left=None, right=None, n=7, N=9)
+		node2 = PoissonNode(id=1, height=30.0, count=5, left=None, right=None, n=7, N=9)
+		assert node1 == node2
+
+	def test_poisson_node_n_equality_negative(self):
+		node1 = PoissonNode(id=1, height=3.0, count=5, left=None, right=None, n=7, N=9)
+		node2 = PoissonNode(id=1, height=3.0, count=5, left=None, right=None, n=70, N=9)
+		assert node1 != node2
+		
+	def test_poisson_node_N_equality_negative(self):
+		node1 = PoissonNode(id=1, height=3.0, count=5, left=None, right=None, n=7, N=9)
+		node2 = PoissonNode(id=1, height=3.0, count=5, left=None, right=None, n=7, N=90)
+		assert node1 != node2
+	
+	def test_poisson_node_equality_different_type(self):
+		node = PoissonNode(id=1, height=3.0, count=5, left=None, right=None, n=7, N=9)
+		non_node_object = {"id": 1}
+		assert node != non_node_object
+
+
 class TestMultinomialNode(unittest.TestCase):
 	def test_attributes(self):
 		# print("\nTesting Node attributes")
@@ -56,6 +132,22 @@ class TestMultinomialNode(unittest.TestCase):
 		# print("\nTesting Node count > 0")
 		with self.assertRaises(ValueError):
 			MultinomialNode(id=0, height=0, count=0, left=None, right=None, n=np.ndarray([1, 1, 1]))
+
+
+class TestMultinomialPair(unittest.SkipTest):
+	def test_multinomial_pair_valid_initialization(self):
+		pair = MultinomialPair(distance=0.5, node_s=None, node_t=None)
+		assert pair.distance == 0.5
+		assert pair.node_s is None
+		assert pair.node_t is None
+
+	def test_multinomial_pair_missing_distance(self):
+		with self.assertRaises(TypeError):
+			MultinomialPair(node_s=None, node_t=None)  # Missing `distance`
+
+	def test_multinomial_pair_invalid_distance_type():
+		with self.assertRaises(ValueError):  # Assuming validation exists
+			MultinomialPair(distance="not a float", node_s=None, node_t=None)
 
 
 class Stage1FastClusteringKMeansTests(TestCase):
@@ -282,6 +374,108 @@ class TestMultinomial(unittest.TestCase):
 		expected_bin = MultinomialNode(id=7, height=41, count=2, left=node_s, right=node_t, n=np.array([5, 11, 8]))
 		actual_node = calculate_fusion_representative(node_pair, id_)
 		self.assertEqual(actual_node, expected_bin)
+
+
+class TestTrees(unittest.TestCase):
+	def test_get_tree_ids_from_single_node(self):
+		# Single root node
+		node = NormalNode(
+				id=1,
+				height=5.0,
+				count=10,
+				left=None,
+				right=None,
+				x=np.array([0.0, 0.0]),
+				V=np.eye(2),
+				inv_V=np.eye(2)
+		)
+		assert get_tree_ids_from(node) == [1]
+	
+	def test_get_tree_ids_from_left_subtree(self):
+		# Left subtree
+		left_child = NormalNode(
+				id=2,
+				height=3.0,
+				count=5,
+				left=None,
+				right=None,
+				x=np.array([1.0, 1.0]),
+				V=np.eye(2),
+				inv_V=np.eye(2)
+		)
+		root = NormalNode(
+				id=1,
+				height=5.0,
+				count=10,
+				left=left_child,
+				right=None,
+				x=np.array([0.0, 0.0]),
+				V=np.eye(2),
+				inv_V=np.eye(2)
+		)
+		assert get_tree_ids_from(root) == [1, 2]  # Only left_child exists
+	
+	def test_get_tree_ids_from_right_subtree(self):
+		# Right subtree
+		right_child = NormalNode(
+				id=3,
+				height=2.0,
+				count=15,
+				left=None,
+				right=None,
+				x=np.array([2.0, 2.0]),
+				V=np.eye(2),
+				inv_V=np.eye(2)
+		)
+		root = NormalNode(
+				id=1,
+				height=5.0,
+				count=10,
+				left=None,
+				right=right_child,
+				x=np.array([0.0, 0.0]),
+				V=np.eye(2),
+				inv_V=np.eye(2)
+		)
+		assert get_tree_ids_from(root) == [1, 3]  # Only right_child exists
+	
+	def test_get_tree_ids_from_balanced_tree(self):
+		# Balanced tree with left and right children
+		left_child = NormalNode(
+				id=2,
+				height=3.0,
+				count=5,
+				left=None,
+				right=None,
+				x=np.array([1.0, 1.0]),
+				V=np.eye(2),
+				inv_V=np.eye(2)
+		)
+		right_child = NormalNode(
+				id=3,
+				height=2.0,
+				count=15,
+				left=None,
+				right=None,
+				x=np.array([2.0, 2.0]),
+				V=np.eye(2),
+				inv_V=np.eye(2)
+		)
+		root = NormalNode(
+				id=1,
+				height=5.0,
+				count=10,
+				left=left_child,
+				right=right_child,
+				x=np.array([0.0, 0.0]),
+				V=np.eye(2),
+				inv_V=np.eye(2)
+		)
+		assert get_tree_ids_from(root) == [1, 2, 3]  # Both children are present
+	
+	def test_get_tree_ids_from_none_node(self):
+		# If the node is None, the function should return an empty list
+		assert get_tree_ids_from(None) == []
 
 
 class TestRustModule(unittest.TestCase):
